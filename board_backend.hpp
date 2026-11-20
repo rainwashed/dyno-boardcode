@@ -40,6 +40,10 @@ private:
   volatile bool m_LoRaOn{false};
   static int64_t m_LastSend;
   static int64_t m_LastCleanup;
+  // Previous sample used to approximate dyno velocity (single-sample buffer)
+  int64_t m_PrevTimestamp{0};
+  float m_PrevDisplacement{0.0f};
+  bool m_HasPrevSample{false};
   BoardWifi m_wifi;
   SDCard m_sd;
   RPMCollector wheel_rc;

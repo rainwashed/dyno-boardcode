@@ -1,6 +1,7 @@
 #include "board_backend.hpp"
 #include <Arduino.h>
 #include <HardwareSerial.h>
+#include <cstdint>
 #include <cstdio>
 
 int64_t BoardBackend::m_LastSend = 0;
@@ -31,21 +32,30 @@ void BoardBackend::Run() {
   }
 
   // collect data here, will be changed with canbus implementation
-  m_wheel = wheel_rc.GetRPM(esp_timer_get_time(), digitalRead(32)) / 2;
-  m_engine = engine_rc.GetRPM(esp_timer_get_time(), digitalRead(33));
-  m_force = dyno_rc.GetUnitForce(esp_timer_get_time(), 5);
-  m_displacement = dyno_rc.GetLinearDisplacement(esp_timer_get_time());
+  m_wheel = wheel_rc.GetRPM(now, digitalRead(32)) / 2;
+  m_engine = engine_rc.GetRPM(now, digitalRead(33));
+  m_force = dyno_rc.GetUnitForce(now, 1) / 101.97;            // grams to N
+  m_displacement = dyno_rc.GetLinearDisplacement(now) / 25.4; // mm to inch
+
+  // Approximate velocity from the previous sample (single-sample buffer).
+  float velocity = 0.0f;
+  if (m_HasPrevSample) {
+    velocity = dyno_rc.GetVelocity(m_PrevTimestamp, now, m_PrevDisplacement,
+                                   m_displacement);
+  }
+  m_PrevTimestamp = now;
+  m_PrevDisplacement = m_displacement;
+  m_HasPrevSample = true;
 
   // FR/FL/BR/BL is the shock dyno which is not implemented in this version of the boardcode; but it is necessary for the correct packet to be interpreted by the DAQ app.
-  snprintf(m_Msg, sizeof(m_Msg), "T %llu E %d W %d FR 0 FL 0 BR 0 BL 0 DF %f DD %f \n", GetRealTime(),
-           m_engine, m_wheel, m_force, m_displacement);
+  snprintf(m_Msg, sizeof(m_Msg),
+           "T %llu E %d W %d FR 0 FL 0 BR 0 BL 0 DF %f DD %f DV %f \n",
+           (unsigned long long)now, m_engine, m_wheel, m_force, m_displacement,
+           velocity);
 
   if (now - m_LastSend > 50000LL) {
-      SendData(m_Msg);
-  }
-
-  if ((now - m_LastSend > 50000LL) && m_IsTimeSynced) {
-    if (m_sd.isOpen && m_sd.isWrite) {
+    SendData(m_Msg);
+    if (m_IsTimeSynced && m_sd.isOpen && m_sd.isWrite) {
       m_sd.WriteSD(m_Msg);
     }
     m_LastSend = now;

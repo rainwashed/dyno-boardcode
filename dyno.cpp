@@ -46,3 +46,13 @@ float Dyno::readLinearVoltage(int pin) {
                   0.034143524634089;
   return voltage;
 }
+
+float Dyno::GetVelocity(int64_t timestamp1, int64_t timestamp2,
+                        float displacement1, float displacement2) {
+  // Timestamps are in microseconds. Convert the elapsed time to seconds and
+  // keep it as a float so sub-second sample intervals do not truncate to zero.
+  int64_t elapsedMicros = timestamp2 - timestamp1;
+  if (elapsedMicros <= 0) return 0.0f;
+  float elapsedSeconds = static_cast<float>(elapsedMicros) / 1000000.0f;
+  return (displacement2 - displacement1) / elapsedSeconds;
+}
